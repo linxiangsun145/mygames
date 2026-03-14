@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>T4噬菌体 × 大肠杆菌</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 100vw; height: 100vh;
+    overflow: hidden;
+    background: #000;
+    font-family: 'Noto Serif SC', 'SimSun', '宋体', serif;
+  }
+  #canvas-container {
+    width: 100%; height: 100%;
+    position: relative;
+  }
+  canvas { display: block; }
+
+  /* ===== 模式遮罩 ===== */
+  #modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 4, 18, 0.92);
+    backdrop-filter: blur(12px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+  }
+  #modal-box {
+    max-width: 560px; width: 90%;
+    border: 1px solid rgba(0, 200, 255, 0.25);
+    background: linear-gradient(160deg, rgba(0, 20, 50, 0.95) 0%, rgba(0, 30, 40, 0.9) 100%);
+    border-radius: 4px;
+    padding: 40px 36px 32px;
+    box-shadow: 0 0 60px rgba(0, 160, 230, 0.12), 0 0 120px rgba(0, 80, 130, 0.08);
+    color: #a8d8ea;
+  }
+  #modal-box h2 {
+    font-size: 14px;
+    letter-spacing: 0.3em;
+    color: rgba(0,200,220,0.5);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    font-weight: 400;
+  }
+  #modal-warning {
+    font-size: 15px;
+    line-height: 1.9;
+    color: #c5e0ee;
+    border-left: 2px solid rgba(0,200,180,0.3);
+    padding-left: 14px;
+    margin-bottom: 28px;
+  }
+  #modal-warning .bold-red {
+    font-weight: 700;
+    color: #ff3a3a;
+  }
+  #modal-box p.level-label {
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    color: rgba(0,200,220,0.45);
+    margin-bottom: 12px;
+  }
+  .level-buttons {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 28px;
+  }
+  .mode-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .mode-btn {
+    flex: 1;
+    padding: 10px 8px;
+    background: rgba(0,70,80,0.45);
+    border: 1px solid rgba(80,220,180,0.28);
+    color: #9adfd6;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .mode-btn.selected {
+    background: rgba(0,130,130,0.6);
+    border-color: rgba(100,255,220,0.8);
+    color: #dbfffa;
+    box-shadow: 0 0 12px rgba(100,255,220,0.24);
+  }
+  .level-btn {
+    flex: 1; min-width: 60px;
+    padding: 10px 8px;
+    background: rgba(0,60,90,0.5);
+    border: 1px solid rgba(0,180,200,0.2);
+    color: #7abfd4;
+    font-size: 15px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+    text-align: center;
+    font-family: inherit;
+  }
+  .level-btn:hover {
+    background: rgba(0,100,140,0.5);
+    border-color: rgba(0,200,230,0.5);
+    color: #c8eaf8;
+  }
+  .level-btn.selected {
+    background: rgba(0,100,160,0.7);
+    border-color: rgba(0,200,255,0.7);
+    color: #e0f4ff;
+    box-shadow: 0 0 12px rgba(0,180,255,0.3);
+  }
+  #start-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(90deg, rgba(0,80,130,0.8), rgba(0,120,160,0.7));
+    border: 1px solid rgba(0,200,240,0.4);
+    color: #d0f0ff;
+    font-size: 15px;
+    letter-spacing: 0.25em;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.25s;
+    font-family: inherit;
+  }
+  #start-btn:hover {
+    background: linear-gradient(90deg, rgba(0,110,180,0.9), rgba(0,150,200,0.8));
+    box-shadow: 0 0 20px rgba(0,160,240,0.3);
+  }
+
+  /* ===== HUD ===== */
+  #hud {
+    position: fixed;
+    bottom: 20px; left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    gap: 20px;
+    align-items: center;
+    background: rgba(0,8,24,0.6);
+    border: 1px solid rgba(0,160,200,0.15);
+    border-radius: 3px;
+    padding: 10px 22px;
+    z-index: 100;
+  }
+  #hud .hud-item {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: rgba(100,200,230,0.5);
+  }
+  #hud .hud-sep { color: rgba(0,160,180,0.2); }
+  #dragging-indicator {
+    position: fixed; top: 18px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px; letter-spacing: 0.2em;
+    color: rgba(0,220,255,0.5);
+    background: rgba(0,10,30,0.5);
+    padding: 5px 14px; border-radius: 2px;
+    display: none;
+    z-index: 100;
+    border: 1px solid rgba(0,180,220,0.15);
+  }
+
+  #ecoli-indicator {
+    position: fixed;
+    right: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: none;
+    align-items: center;
+    gap: 8px;
+    z-index: 120;
+    color: rgba(140, 255, 180, 0.9);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-shadow: 0 0 8px rgba(80, 255, 150, 0.45);
+  }
+
+  #ecoli-arrow {
+    width: 0;
+    height: 0;
+    border-top: 10px solid transparent;
+    border-bottom: 10px solid transparent;
+    border-left: 16px solid rgba(120, 255, 170, 0.95);
+    filter: drop-shadow(0 0 6px rgba(80, 255, 140, 0.6));
+    transform-origin: 50% 50%;
+  }
+
+  #infection-status {
+    position: fixed;
+    left: 18px;
+    top: 18px;
+    z-index: 130;
+    color: rgba(170,255,235,0.92);
+    background: rgba(0,20,26,0.58);
+    border: 1px solid rgba(90,220,210,0.35);
+    border-radius: 3px;
+    padding: 8px 12px;
+    letter-spacing: 0.08em;
+    font-size: 12px;
+    text-shadow: 0 0 8px rgba(80,255,210,0.25);
+    pointer-events: none;
+  }
+
+  #infection-desc {
+    position: fixed;
+    left: 18px;
+    top: 56px;
+    z-index: 130;
+    max-width: 340px;
+    color: rgba(175, 235, 228, 0.88);
+    background: rgba(0, 16, 26, 0.45);
+    border: 1px solid rgba(70, 190, 180, 0.28);
+    border-radius: 3px;
+    padding: 8px 11px;
+    letter-spacing: 0.03em;
+    font-size: 12px;
+    line-height: 1.6;
+    text-shadow: 0 0 8px rgba(80,255,210,0.2);
+    pointer-events: none;
+  }
+
+  #pause-btn {
+    position: fixed;
+    right: 18px;
+    top: 18px;
+    z-index: 131;
+    display: none;
+    padding: 8px 14px;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: #d8fbff;
+    background: rgba(0, 32, 46, 0.68);
+    border: 1px solid rgba(90, 220, 255, 0.45);
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  #pause-btn:hover {
+    background: rgba(0, 56, 78, 0.82);
+  }
+
+  .overlay-menu {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 8, 20, 0.76);
+    backdrop-filter: blur(8px);
+    z-index: 950;
+  }
+  .overlay-menu .menu-box {
+    width: min(440px, 90vw);
+    border: 1px solid rgba(100, 220, 240, 0.35);
+    background: linear-gradient(160deg, rgba(0, 24, 44, 0.94), rgba(0, 26, 34, 0.92));
+    border-radius: 4px;
+    padding: 26px 24px 20px;
+    color: #c7f4ff;
+  }
+  .overlay-menu h3 {
+    font-size: 15px;
+    letter-spacing: 0.14em;
+    margin-bottom: 16px;
+    font-weight: 500;
+  }
+  .overlay-menu p {
+    font-size: 13px;
+    line-height: 1.8;
+    color: rgba(184, 235, 245, 0.92);
+    margin-bottom: 16px;
+  }
+  .menu-actions {
+    display: flex;
+    gap: 10px;
+  }
+  .menu-btn {
+    flex: 1;
+    padding: 11px 10px;
+    font-family: inherit;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    border-radius: 3px;
+    border: 1px solid rgba(90, 220, 230, 0.42);
+    background: rgba(0, 60, 76, 0.58);
+    color: #d8fdff;
+    cursor: pointer;
+  }
+  .menu-btn:hover {
+    background: rgba(0, 88, 108, 0.72);
+  }
+
+  /* ===== 粒子背景层 ===== */
+  #bg-particles {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- 背景粒子 -->
+<canvas id="bg-particles"></canvas>
+
+<!-- Three.js 画布容器 -->
+<div id="canvas-container"></div>
+
+<!-- 拖拽状态指示 -->
+<div id="dragging-indicator">· 拖拽操控噬菌体 ·</div>
+
+<!-- 大肠杆菌方向指示 -->
+<div id="ecoli-indicator">
+  <div id="ecoli-arrow"></div>
+  <span>大肠杆菌方向</span>
+</div>
+
+<div id="infection-status">感染阶段：搜索目标</div>
+<div id="infection-desc">噬菌体在水体中缓慢搜索宿主细菌，准备接近。</div>
+<button id="pause-btn" type="button">暂停</button>
+
+<div id="pause-menu" class="overlay-menu">
+  <div class="menu-box">
+    <h3>游戏已暂停</h3>
+    <p>你可以继续当前流程，或返回主界面重新开始。</p>
+    <div class="menu-actions">
+      <button id="resume-btn" class="menu-btn" type="button">继续</button>
+      <button id="pause-home-btn" class="menu-btn" type="button">回到主界面</button>
+    </div>
+  </div>
+</div>
+
+<div id="round-complete-menu" class="overlay-menu">
+  <div class="menu-box">
+    <h3>单局完成</h3>
+    <p>本轮感染流程已结束，可返回主界面开始新一局。</p>
+    <div class="menu-actions">
+      <button id="complete-home-btn" class="menu-btn" type="button">回到主界面</button>
+    </div>
+  </div>
+</div>
+
+<!-- 底部 HUD -->
+<div id="hud" style="display:flex;">
+  <span class="hud-item">滚轮按住+拖动 旋转视角</span>
+  <span class="hud-sep">|</span>
+  <span class="hud-item">滚轮滚动 缩放</span>
+  <span class="hud-sep">|</span>
+  <span class="hud-item">单击+拖拽 操控噬菌体</span>
+</div>
+
+<!-- 警告遮罩 -->
+<div id="modal-overlay">
+  <div id="modal-box">
+    <h2>⚠ 播放前须知</h2>
+    <div id="modal-warning">
+      动画含微恐元素，请密集恐惧症、深海恐惧症、巨物恐惧症玩家选择<span class="bold-red">0级</span>；接受程度越高可选级数越高。
+    </div>
+    <p class="level-label">SELECT DISCOMFORT TOLERANCE LEVEL</p>
+    <div class="level-buttons">
+      <button class="level-btn selected" data-level="0">0级</button>
+      <button class="level-btn" data-level="1">1级</button>
+      <button class="level-btn" data-level="2">2级</button>
+      <button class="level-btn" data-level="3">3级</button>
+    </div>
+    <p class="level-label">CONTROL MODE</p>
+    <div class="mode-buttons">
+      <button class="mode-btn selected" data-mode="manual">手动操控</button>
+      <button class="mode-btn" data-mode="auto">自动演示</button>
+    </div>
+    <button id="start-btn">进入模拟空间</button>
+  </div>
+</div>
+
+<!-- Three.js r158 via importmap + ES module -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+'use strict';
+
+// ============================================================
+//  背景粒子（模拟深海浮游生物）
+// ============================================================
+(function initBgParticles() {
+  const cnv = document.getElementById('bg-particles');
+  const ctx = cnv.getContext('2d');
+  let W, H, particles = [];
+  function resize() {
+    W = cnv.width = window.innerWidth;
+    H = cnv.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+  for (let i = 0; i < 120; i++) {
+    particles.push({
+      x: Math.random() * 9999,
+      y: Math.random() * 9999,
+      r: Math.random() * 1.2 + 0.2,
+      vx: (Math.random() - 0.5) * 0.12,
+      vy: (Math.random() - 0.5) * 0.12,
+      a: Math.random() * 0.35 + 0.05,
+      hue: Math.random() > 0.5 ? '160,255,230' : '80,180,240'
+    });
+  }
+  let lastT = 0;
+  function tick(t) {
+    const dt = Math.min(t - lastT, 50); lastT = t;
+    ctx.clearRect(0, 0, W, H);
+    for (const p of particles) {
+      p.x += p.vx * dt * 0.1;
+      p.y += p.vy * dt * 0.1;
+      if (p.x < 0) p.x += W; if (p.x > W) p.x -= W;
+      if (p.y < 0) p.y += H; if (p.y > H) p.y -= H;
+      ctx.beginPath();
+      ctx.arc(p.x % W, p.y % H, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${p.hue},${p.a})`;
+      ctx.fill();
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+
+// ============================================================
+//  模式遮罩 UI
+// ============================================================
+let selectedLevel = 0;
+let selectedControlMode = 'manual';
+document.querySelectorAll('.level-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.level-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedLevel = parseInt(btn.dataset.level);
+  });
+});
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedControlMode = btn.dataset.mode;
+  });
+});
+document.getElementById('start-btn').addEventListener('click', () => {
+  document.getElementById('modal-overlay').style.display = 'none';
+  initGame(selectedLevel, selectedControlMode);
+});
+
+// ============================================================
+//  Tone.js-free 音效（Web Audio API）
+// ============================================================
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+function playDing() {
+  ensureAudio();
+  const now = audioCtx.currentTime;
+  // 主音
+  const osc1 = audioCtx.createOscillator();
+  const gain1 = audioCtx.createGain();
+  osc1.type = 'sine';
+  osc1.frequency.setValueAtTime(1200, now);
+  osc1.frequency.exponentialRampToValueAtTime(900, now + 0.5);
+  gain1.gain.setValueAtTime(0.35, now);
+  gain1.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
+  osc1.connect(gain1).connect(audioCtx.destination);
+  osc1.start(now); osc1.stop(now + 1.8);
+
+  // 回声1
+  const osc2 = audioCtx.createOscillator();
+  const gain2 = audioCtx.createGain();
+  osc2.type = 'sine';
+  osc2.frequency.setValueAtTime(1190, now + 0.08);
+  osc2.frequency.exponentialRampToValueAtTime(880, now + 0.6);
+  gain2.gain.setValueAtTime(0.15, now + 0.08);
+  gain2.gain.exponentialRampToValueAtTime(0.001, now + 2.2);
+  osc2.connect(gain2).connect(audioCtx.destination);
+  osc2.start(now + 0.08); osc2.stop(now + 2.2);
+
+  // 回声2
+  const osc3 = audioCtx.createOscillator();
+  const gain3 = audioCtx.createGain();
+  osc3.type = 'sine';
+  osc3.frequency.setValueAtTime(1180, now + 0.22);
+  osc3.frequency.exponentialRampToValueAtTime(860, now + 0.8);
+  gain3.gain.setValueAtTime(0.07, now + 0.22);
+  gain3.gain.exponentialRampToValueAtTime(0.001, now + 2.8);
+  osc3.connect(gain3).connect(audioCtx.destination);
+  osc3.start(now + 0.22); osc3.stop(now + 2.8);
+}
+
+// ============================================================
+//  游戏主逻辑
+// ============================================================
+function initGame(level, controlMode) {
+  ensureAudio();
+
+  const container = document.getElementById('canvas-container');
+
+  // ---------- Renderer ----------
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = false;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.9;
+  container.appendChild(renderer.domElement);
+
+  // ---------- Scene ----------
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x00040e);
+  scene.fog = new THREE.FogExp2(0x000814, 0.00135);
+
+  // ---------- Camera ----------
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 2000);
+  // 初始相机位置：噬菌体后方45°俯视
+  camera.position.set(0, 14, 20);
+  camera.lookAt(0, 0, 0);
+
+  // ---------- Lights ----------
+  const ambient = new THREE.AmbientLight(0x002244, 1.9);
+  scene.add(ambient);
+  const rimLight = new THREE.DirectionalLight(0x00aaff, 1.45);
+  rimLight.position.set(-20, 30, -20);
+  scene.add(rimLight);
+  const fillLight = new THREE.PointLight(0x005588, 1.1, 320);
+  fillLight.position.set(0, -10, 0);
+  scene.add(fillLight);
+  // 幽蓝氛围光
+  const blueGlow = new THREE.PointLight(0x00a0ff, 1.0, 280);
+  blueGlow.position.set(20, 20, 20);
+  scene.add(blueGlow);
+  // 墨绿氛围光
+  const greenGlow = new THREE.PointLight(0x00aa66, 0.75, 240);
+  greenGlow.position.set(-30, -20, 10);
+  scene.add(greenGlow);
+
+  // ============================================================
+  //  球形边界
+  // ============================================================
+  // 噬菌体尺寸约 ~8 单位高（程序化），大肠杆菌长度 = 80 单位
+  // 可移动空间球直径 = 大肠杆菌长度 × 10 = 800 → 半径400
+  const PHAGE_HEIGHT = 8;       // 噬菌体程序化高度（单位）
+  const ECOLI_LENGTH = 80;      // 大肠杆菌长度 (10 × 噬菌体高度)
+  const SPACE_RADIUS = 400;     // 球形空间半径
+
+  // ============================================================
+  //  程序化大肠杆菌模型
+  // ============================================================
+  const ecoliGroup = new THREE.Group();
+  scene.add(ecoliGroup);
+  // 大肠杆菌跟随荧光，提升深海低光场景中的可发现性
+  const ecoliBiolight = new THREE.PointLight(0x7affb0, 1.6, 180, 2.0);
+  scene.add(ecoliBiolight);
+
+  // ---- 菌体（胶囊形）----
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: 0x49a66a,
+    roughness: 0.78,
+    metalness: 0.04,
+    emissive: 0x00662a,
+    emissiveIntensity: 1.05,
+    transparent: true,
+    opacity: 1.0,
+  });
+  // capsule: radius 12, length 56 → 总长 ~80
+  const bodyGeo = new THREE.CapsuleGeometry(12, 56, 20, 32);
+  const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+  bodyMesh.rotation.z = Math.PI / 2; // 横躺
+  ecoliGroup.add(bodyMesh);
+
+  // ---- 荧光绿轮廓发光层 ----
+  const outlineMat = new THREE.MeshBasicMaterial({
+    color: 0x66ff99,
+    side: THREE.BackSide,
+    transparent: true,
+    opacity: 0.25 + level * 0.04,
+  });
+  const outlineGeo = new THREE.CapsuleGeometry(12.6, 56, 20, 32);
+  const outlineMesh = new THREE.Mesh(outlineGeo, outlineMat);
+  outlineMesh.rotation.z = Math.PI / 2;
+  ecoliGroup.add(outlineMesh);
+
+  // ---- 菌毛（短毛刺）----
+  const piliFibers = [];
+  const piliMat = new THREE.MeshStandardMaterial({
+    color: 0x65b875,
+    roughness: 1.0, metalness: 0,
+    emissive: 0x004a1e,
+    emissiveIntensity: 0.65,
+  });
+  function addPilus(x, y, z, dirX, dirY, dirZ, len) {
+    const geo = new THREE.CylinderGeometry(0.18, 0.04, len, 4);
+    const m = new THREE.Mesh(geo, piliMat);
+    m.position.set(x, y, z);
+    m.userData.baseDir = new THREE.Vector3(dirX, dirY, dirZ).normalize();
+    m.userData.basePos = new THREE.Vector3(x, y, z);
+    m.userData.len = len;
+    const axis = new THREE.Vector3(0, 1, 0);
+    const dir = new THREE.Vector3(dirX, dirY, dirZ).normalize();
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(axis, dir);
+    m.quaternion.copy(quaternion);
+    m.position.addScaledVector(dir, len / 2);
+    ecoliGroup.add(m);
+    piliFibers.push(m);
+  }
+  // 沿着菌体长轴（X轴）均匀分布菌毛
+  for (let xi = -26; xi <= 26; xi += 8) {
+    for (let a = 0; a < 8; a++) {
+      const angle = (a / 8) * Math.PI * 2 + xi * 0.3;
+      const cosa = Math.cos(angle), sina = Math.sin(angle);
+      addPilus(xi, cosa * 12, sina * 12, 0, cosa, sina, 5 + Math.random() * 3);
+    }
+  }
+
+  // ---- 鞭毛（4条长波浪线）----
+  const flagellaMat = new THREE.MeshStandardMaterial({
+    color: 0x58a66a,
+    roughness: 1.0,
+    emissive: 0x003f1b,
+    emissiveIntensity: 0.55,
+  });
+  const flagellaData = []; // { curve, mesh, phase, baseOffset }
+  function createFlagellum(baseX, baseY, baseZ, phase) {
+    const points = [];
+    const segments = 30;
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const len = 90;
+      const amp = 6 + t * 8;
+      const freq = 2.5;
+      points.push(new THREE.Vector3(
+        baseX - len * t,
+        baseY + Math.sin(t * freq * Math.PI + phase) * amp,
+        baseZ + Math.cos(t * freq * Math.PI * 0.7 + phase) * amp * 0.5
+      ));
+    }
+    const curve = new THREE.CatmullRomCurve3(points);
+    const geo = new THREE.TubeGeometry(curve, 50, 0.25, 5, false);
+    const mesh = new THREE.Mesh(geo, flagellaMat.clone());
+    ecoliGroup.add(mesh);
+    flagellaData.push({ mesh, phase, baseX, baseY, baseZ });
+    return { mesh, phase, baseX, baseY, baseZ };
+  }
+  createFlagellum(-28, 2, 2, 0);
+  createFlagellum(-28, -2, 2, Math.PI * 0.5);
+  createFlagellum(-28, 2, -2, Math.PI);
+  createFlagellum(-28, -2, -2, Math.PI * 1.5);
+
+  // 初始位置：与噬菌体保持更远距离，便于观察完整过程
+  ecoliGroup.position.set(120, 16, -92);
+
+  // E.coli 运动状态
+  const ecoliState = {
+    vel: new THREE.Vector3(0.02, 0.01, -0.015),
+    acc: new THREE.Vector3(),
+    targetDir: new THREE.Vector3(1, 0, 0),
+    smoothDir: new THREE.Vector3(1, 0, 0),
+    accTimer: 0,
+    accInterval: 5.2, // 秒
+    fleeMode: false,
+  };
+
+  // ============================================================
+  //  程序化 T4 噬菌体模型
+  // ============================================================
+  const phageGroup = new THREE.Group();
+  scene.add(phageGroup);
+
+  // ---- 头部（二十面体风格）----
+  // 头部：蓝色荧光，50%透明，可见内部DNA
+  const headGeo = new THREE.IcosahedronGeometry(3.2, 2);
+  const headMat = new THREE.MeshPhysicalMaterial({
+    color: 0x33c8ff,
+    emissive: 0x009dff,
+    emissiveIntensity: 2.4,
+    transparent: true,
+    opacity: 0.62,
+    roughness: 0.06,
+    metalness: 0.12,
+    transmission: 0.55,
+    thickness: 0.7,
+  });
+  const headMesh = new THREE.Mesh(headGeo, headMat);
+  headMesh.position.y = 4.5;
+  phageGroup.add(headMesh);
+
+  // DNA 链（在头部内部）
+  const dnaMat = new THREE.MeshStandardMaterial({
+    color: 0xb53a10,
+    emissive: 0x5a1200,
+    emissiveIntensity: 0.85,
+    roughness: 0.62,
+  });
+  const dnaMeshes = [];
+  function createDNAStrand() {
+    const pts = [];
+    for (let i = 0; i <= 60; i++) {
+      const t = i / 60;
+      const r = 1.8 * Math.sin(t * Math.PI);
+      pts.push(new THREE.Vector3(
+        r * Math.cos(t * Math.PI * 5),
+        -2.8 + t * 5.6,
+        r * Math.sin(t * Math.PI * 5)
+      ));
+    }
+    const curve = new THREE.CatmullRomCurve3(pts);
+    const geo = new THREE.TubeGeometry(curve, 60, 0.12, 5, false);
+    const m = new THREE.Mesh(geo, dnaMat);
+    m.position.y = 4.5;
+    phageGroup.add(m);
+    dnaMeshes.push(m);
+  }
+  createDNAStrand();
+  // 第二条DNA链（偏移）
+  const dnaMat2 = new THREE.MeshStandardMaterial({
+    color: 0x9c2a06,
+    emissive: 0x4d0c00,
+    emissiveIntensity: 0.8,
+    roughness: 0.62,
+  });
+  function createDNAStrand2() {
+    const pts = [];
+    for (let i = 0; i <= 60; i++) {
+      const t = i / 60;
+      const r = 1.5 * Math.sin(t * Math.PI);
+      pts.push(new THREE.Vector3(
+        r * Math.cos(t * Math.PI * 5 + Math.PI),
+        -2.8 + t * 5.6,
+        r * Math.sin(t * Math.PI * 5 + Math.PI)
+      ));
+    }
+    const curve = new THREE.CatmullRomCurve3(pts);
+    const geo = new THREE.TubeGeometry(curve, 60, 0.09, 5, false);
+    const m = new THREE.Mesh(geo, dnaMat2);
+    m.position.y = 4.5;
+    phageGroup.add(m);
+    dnaMeshes.push(m);
+  }
+  createDNAStrand2();
+
+  // ---- 颈部/连接领 ----
+  const collarGeo = new THREE.CylinderGeometry(1.5, 1.2, 0.8, 12);
+  const collarMat = new THREE.MeshStandardMaterial({
+    color: 0x224488, roughness: 0.4, metalness: 0.3, emissive: 0x001133,
+  });
+  const collarMesh = new THREE.Mesh(collarGeo, collarMat);
+  collarMesh.position.y = 1.5;
+  phageGroup.add(collarMesh);
+
+  // ---- 尾鞘（可压缩弹性）----
+  const tailSheathGroup = new THREE.Group();
+  phageGroup.add(tailSheathGroup);
+  const tailMat = new THREE.MeshStandardMaterial({
+    color: 0x1a3a6a,
+    roughness: 0.5, metalness: 0.2,
+    emissive: 0x000820,
+  });
+  // 尾鞘用多个环段构成弹性效果
+  const TAIL_SEGMENTS = 8;
+  const tailRings = [];
+  for (let i = 0; i < TAIL_SEGMENTS; i++) {
+    const t = i / (TAIL_SEGMENTS - 1);
+    const r = THREE.MathUtils.lerp(1.2, 0.5, t);
+    const geo = new THREE.CylinderGeometry(r + 0.1, r - 0.05, 0.55, 12);
+    const ring = new THREE.Mesh(geo, tailMat.clone());
+    ring.position.y = -t * 3.8;
+    tailSheathGroup.add(ring);
+    tailRings.push({ mesh: ring, baseY: -t * 3.8 });
+  }
+
+  // ---- 基板 ----
+  const basePlateGeo = new THREE.CylinderGeometry(1.6, 1.6, 0.4, 16);
+  const basePlateMat = new THREE.MeshStandardMaterial({
+    color: 0x2244aa, roughness: 0.3, metalness: 0.5, emissive: 0x001144,
+  });
+  const basePlateMesh = new THREE.Mesh(basePlateGeo, basePlateMat);
+  basePlateMesh.position.y = -4.0;
+  phageGroup.add(basePlateMesh);
+
+  // ---- 尾丝（6条腿）----
+  const tailFiberData = [];
+  const tailFiberMat = new THREE.MeshStandardMaterial({
+    color: 0x1a5599,
+    roughness: 0.6,
+    emissive: 0x000f33,
+  });
+  const NUM_TAIL_FIBERS = 6;
+  for (let i = 0; i < NUM_TAIL_FIBERS; i++) {
+    const angle = (i / NUM_TAIL_FIBERS) * Math.PI * 2;
+    const baseR = 1.5;
+    const bx = Math.cos(angle) * baseR;
+    const bz = Math.sin(angle) * baseR;
+    const points = buildTailFiberPoints(bx, -4.0, bz, 0, -4.0, 0);
+    const curve = new THREE.CatmullRomCurve3(points);
+    const geo = new THREE.TubeGeometry(curve, 20, 0.12, 5, false);
+    const mesh = new THREE.Mesh(geo, tailFiberMat.clone());
+    phageGroup.add(mesh);
+    tailFiberData.push({
+      mesh, curve, angle,
+      baseX: bx, baseZ: bz,
+      baseY: -4.0,
+    });
+  }
+  function buildTailFiberPoints(bx, by, bz, cx, cy, cz) {
+    // 上吸附点 → 向外弯 → 末端竖直向下
+    return [
+      new THREE.Vector3(bx, by, bz),
+      new THREE.Vector3(bx * 2.2, by - 1.5, bz * 2.2),
+      new THREE.Vector3(bx * 2.8, by - 3.5, bz * 2.8),
+      new THREE.Vector3(bx * 2.0, by - 5.5 + cy, bz * 2.0 + cz),
+    ];
+  }
+
+  // 噬菌体初始位置：与宿主拉开距离
+  phageGroup.position.set(0, -6, 22);
+
+  // 噬菌体运动状态
+  const phageState = {
+    vel: new THREE.Vector3(),
+    floating: 0,       // 浮动相位
+    floatAmp: 0.018,   // 浮标摆幅
+    floatSpeed: 0.6,   // 浮动角速度
+    isDragging: false,
+    dragDelta: new THREE.Vector2(),
+    tiltAngle: new THREE.Euler(),
+  };
+
+  const infection = {
+    mode: controlMode,
+    phase: 'search',
+    timer: 0,
+    attachNormal: new THREE.Vector3(1, 0, 0),
+    isComplete: false,
+    shellHidden: false,
+  };
+  const ATTACH_DISTANCE = 22.8;
+  const INJECT_DISTANCE = 21.8;
+
+  function orientPhageForAttach(phageObj, surfaceNormal) {
+    // 让噬菌体局部“向下轴”(尾部方向) 指向细菌中心方向，避免附着时穿模
+    const desiredTailDir = surfaceNormal.clone().negate().normalize();
+    const qTarget = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), desiredTailDir);
+    phageObj.quaternion.slerp(qTarget, 0.16);
+  }
+
+  function setInfectionPhase(nextPhase) {
+    if (infection.phase === nextPhase) return;
+    infection.phase = nextPhase;
+    infection.timer = 0;
+    if (nextPhase === 'search') infection.shellHidden = false;
+    const phaseTextMap = {
+      search: '感染阶段：搜索目标',
+      approach: '感染阶段：接近宿主',
+      attach: '感染阶段：尾丝附着',
+      inject: '感染阶段：DNA注入',
+      infected: '感染阶段：感染完成',
+      lysis: '感染阶段：细胞裂解',
+    };
+    const phaseDescMap = {
+      search: '噬菌体在水体中缓慢搜索宿主细菌，准备接近。',
+      approach: '识别宿主后，噬菌体减速并调整角度贴近细胞表面。',
+      attach: '尾丝与细菌外膜接触并固定，为注入做准备。',
+      inject: '尾鞘收缩推动遗传物质进入细菌内部。',
+      infected: '细菌已被感染，内部过程开始重构。',
+      lysis: '细胞结构崩解并裂解，释放感染后碎屑。',
+    };
+    infectionStatusEl.textContent = phaseTextMap[nextPhase] || '感染阶段：搜索目标';
+    infectionDescEl.textContent = phaseDescMap[nextPhase] || '噬菌体在水体中缓慢搜索宿主细菌，准备接近。';
+  }
+
+  const LYSIS_PARTICLE_COUNT = 220;
+  const lysisPositions = new Float32Array(LYSIS_PARTICLE_COUNT * 3);
+  const lysisVelocities = [];
+  for (let i = 0; i < LYSIS_PARTICLE_COUNT; i++) {
+    lysisPositions[i * 3] = 10000;
+    lysisPositions[i * 3 + 1] = 10000;
+    lysisPositions[i * 3 + 2] = 10000;
+    lysisVelocities.push(new THREE.Vector3());
+  }
+  const lysisGeo = new THREE.BufferGeometry();
+  lysisGeo.setAttribute('position', new THREE.BufferAttribute(lysisPositions, 3));
+  const lysisMat = new THREE.PointsMaterial({
+    color: 0x8dffb0,
+    size: 1.6,
+    transparent: true,
+    opacity: 0.0,
+    sizeAttenuation: true,
+  });
+  const lysisPoints = new THREE.Points(lysisGeo, lysisMat);
+  lysisPoints.visible = false;
+  scene.add(lysisPoints);
+  const lysisState = {
+    initiated: false,
+    exploded: false,
+    anchor: new THREE.Vector3(),
+    sourceScale: new THREE.Vector3(1, 1, 1),
+  };
+
+  // ============================================================
+  //  相机控制
+  // ============================================================
+  // 球坐标控制（轨道相机）
+  let camTheta = 0.3;                // 方位角
+  let camPhi = Math.PI / 4;          // 仰角（0=顶，PI=底）
+  let camTargetDist = 22;            // 相机到目标点距离
+  let camDist = camTargetDist;
+  let camTarget = new THREE.Vector3(); // 跟随噬菌体或固定
+
+  // 中键拖拽旋转
+  let isMiddleDragging = false;
+  let lastMX = 0, lastMY = 0;
+
+  // ============================================================
+  //  输入处理
+  // ============================================================
+  const canvas = renderer.domElement;
+  const ecoliIndicator = document.getElementById('ecoli-indicator');
+  const ecoliArrow = document.getElementById('ecoli-arrow');
+  const infectionStatusEl = document.getElementById('infection-status');
+  const infectionDescEl = document.getElementById('infection-desc');
+  const pauseBtn = document.getElementById('pause-btn');
+  const pauseMenu = document.getElementById('pause-menu');
+  const resumeBtn = document.getElementById('resume-btn');
+  const pauseHomeBtn = document.getElementById('pause-home-btn');
+  const roundCompleteMenu = document.getElementById('round-complete-menu');
+  const completeHomeBtn = document.getElementById('complete-home-btn');
+
+  const gameState = {
+    paused: false,
+    roundCompleted: false,
+  };
+
+  function goMainMenu() {
+    window.location.reload();
+  }
+
+  function setPaused(paused) {
+    if (gameState.roundCompleted) return;
+    gameState.paused = paused;
+    pauseMenu.style.display = paused ? 'flex' : 'none';
+    if (paused) {
+      isLeftDown = false;
+      phageState.isDragging = false;
+      phageState.dragDelta.set(0, 0);
+      document.getElementById('dragging-indicator').style.display = 'none';
+    }
+  }
+
+  function showRoundComplete() {
+    if (gameState.roundCompleted) return;
+    gameState.roundCompleted = true;
+    gameState.paused = true;
+    pauseBtn.style.display = 'none';
+    pauseMenu.style.display = 'none';
+    roundCompleteMenu.style.display = 'flex';
+  }
+
+  pauseBtn.style.display = 'block';
+  pauseMenu.style.display = 'none';
+  roundCompleteMenu.style.display = 'none';
+  pauseBtn.onclick = () => setPaused(true);
+  resumeBtn.onclick = () => setPaused(false);
+  pauseHomeBtn.onclick = goMainMenu;
+  completeHomeBtn.onclick = goMainMenu;
+  window.addEventListener('keydown', e => {
+    if ((e.key === 'p' || e.key === 'P') && !gameState.roundCompleted) {
+      setPaused(!gameState.paused);
+    }
+  });
+
+  // 鼠标左键拖拽 → 控制噬菌体
+  let isLeftDown = false;
+  let lastLX = 0, lastLY = 0;
+
+  canvas.addEventListener('mousedown', e => {
+    ensureAudio();
+    if (e.button === 0) {
+      if (infection.mode !== 'manual' || infection.phase === 'inject' || infection.phase === 'infected' || infection.phase === 'lysis') return;
+      isLeftDown = true;
+      lastLX = e.clientX; lastLY = e.clientY;
+      phageState.isDragging = true;
+      document.getElementById('dragging-indicator').style.display = 'block';
+    }
+    if (e.button === 1) {
+      e.preventDefault();
+      isMiddleDragging = true;
+      lastMX = e.clientX; lastMY = e.clientY;
+    }
+  });
+  window.addEventListener('mouseup', e => {
+    if (e.button === 0) { isLeftDown = false; phageState.isDragging = false; phageState.dragDelta.set(0,0); document.getElementById('dragging-indicator').style.display = 'none'; }
+    if (e.button === 1) { isMiddleDragging = false; }
+  });
+  window.addEventListener('mousemove', e => {
+    const dx = e.clientX - lastLX;
+    const dy = e.clientY - lastLY;
+    if (isLeftDown) {
+      phageState.dragDelta.set(dx, dy);
+      lastLX = e.clientX; lastLY = e.clientY;
+    }
+    if (isMiddleDragging) {
+      const ddx = e.clientX - lastMX;
+      const ddy = e.clientY - lastMY;
+      camTheta -= ddx * 0.006;
+      camPhi += ddy * 0.006;
+      camPhi = Math.max(0.08, Math.min(Math.PI - 0.08, camPhi));
+      lastMX = e.clientX; lastMY = e.clientY;
+    }
+  });
+
+  // 滚轮缩放
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    camTargetDist += e.deltaY * 0.03;
+    camTargetDist = Math.max(6, Math.min(SPACE_RADIUS - 5, camTargetDist));
+  }, { passive: false });
+
+  // 触摸支持
+  let touches = {};
+  let lastPinchDist = 0;
+  let isTwoFingerDrag = false;
+  let isSingleDrag = false;
+  let lastTouchX = 0, lastTouchY = 0;
+  let touchDoubleTapTimer = null;
+  let lastTouchEnd = 0;
+
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    ensureAudio();
+    touches = {};
+    for (const t of e.touches) touches[t.identifier] = { x: t.clientX, y: t.clientY };
+    if (e.touches.length === 1) {
+      const now = Date.now();
+      // 双击检测（300ms内两次触摸）→ 进入拖拽噬菌体模式
+      if (infection.mode === 'manual' && now - lastTouchEnd < 300 && infection.phase !== 'inject' && infection.phase !== 'infected' && infection.phase !== 'lysis') {
+        isSingleDrag = true;
+        phageState.isDragging = true;
+        document.getElementById('dragging-indicator').style.display = 'block';
+      } else {
+        // 单击开始：单指滑动 = 旋转视角
+        isSingleDrag = false;
+      }
+      lastTouchX = e.touches[0].clientX;
+      lastTouchY = e.touches[0].clientY;
+    }
+    if (e.touches.length === 2) {
+      isTwoFingerDrag = true;
+      isSingleDrag = false;
+      phageState.isDragging = false;
+      document.getElementById('dragging-indicator').style.display = 'none';
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      lastPinchDist = Math.sqrt(dx*dx + dy*dy);
+      lastMX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      lastMY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+      // 双指：旋转 + 缩放
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const pinchDist = Math.sqrt(dx*dx + dy*dy);
+      const ddx = cx - lastMX, ddy = cy - lastMY;
+      camTheta -= ddx * 0.006;
+      camPhi += ddy * 0.006;
+      camPhi = Math.max(0.08, Math.min(Math.PI - 0.08, camPhi));
+      camTargetDist *= lastPinchDist / pinchDist;
+      camTargetDist = Math.max(6, Math.min(SPACE_RADIUS - 5, camTargetDist));
+      lastPinchDist = pinchDist;
+      lastMX = cx; lastMY = cy;
+    } else if (e.touches.length === 1) {
+      const tx = e.touches[0].clientX;
+      const ty = e.touches[0].clientY;
+      const tdx = tx - lastTouchX;
+      const tdy = ty - lastTouchY;
+      if (isSingleDrag) {
+        // 双击后按住 → 拖拽噬菌体
+        phageState.dragDelta.set(tdx, tdy);
+      } else {
+        // 单指滑动 → 旋转视角
+        camTheta -= tdx * 0.006;
+        camPhi += tdy * 0.006;
+        camPhi = Math.max(0.08, Math.min(Math.PI - 0.08, camPhi));
+      }
+      lastTouchX = tx; lastTouchY = ty;
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    lastTouchEnd = Date.now();
+    if (e.touches.length === 0) {
+      isTwoFingerDrag = false;
+      isSingleDrag = false;
+      phageState.isDragging = false;
+      phageState.dragDelta.set(0, 0);
+      document.getElementById('dragging-indicator').style.display = 'none';
+    }
+  }, { passive: false });
+
+  // ============================================================
+  //  窗口缩放
+  // ============================================================
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // ============================================================
+  //  深海氛围粒子（Three.js 场景内）
+  // ============================================================
+  const particleCount = 400;
+  const particleGeo = new THREE.BufferGeometry();
+  const particlePos = new Float32Array(particleCount * 3);
+  for (let i = 0; i < particleCount; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const r = Math.pow(Math.random(), 0.33) * (SPACE_RADIUS * 0.88);
+    particlePos[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+    particlePos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+    particlePos[i*3+2] = r * Math.cos(phi);
+  }
+  particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePos, 3));
+  const particleMat = new THREE.PointsMaterial({
+    color: 0x00aacc,
+    size: 0.5,
+    transparent: true,
+    opacity: 0.25,
+    sizeAttenuation: true,
+  });
+  const particles3D = new THREE.Points(particleGeo, particleMat);
+  scene.add(particles3D);
+
+  // ============================================================
+  //  GLTF 模型加载（用户提供的文件）
+  // ============================================================
+  // 如果用户文件夹中存在 E.coli.glb / full_bac.glb，会自动替换程序化模型
+  // 否则使用程序化模型
+  function tryLoadGLTF(path, onSuccess) {
+    const loader = new GLTFLoader();
+    loader.load(path,
+      gltf => onSuccess(gltf.scene),
+      undefined,
+      err => { /* 文件不存在，使用程序化模型 */ }
+    );
+  }
+  tryLoadGLTF('E.coli.glb', gltfScene => {
+    // 替换程序化 E.coli
+    scene.remove(ecoliGroup);
+    gltfScene.scale.setScalar(ECOLI_LENGTH / 80);
+    scene.add(gltfScene);
+    gltfScene.position.copy(ecoliGroup.position);
+    // 将 gltfScene 引用同步到运动系统
+    ecoliState._gltfScene = gltfScene;
+  });
+  tryLoadGLTF('full_bac.glb', gltfScene => {
+    scene.remove(phageGroup);
+    gltfScene.scale.setScalar(1);
+    scene.add(gltfScene);
+    gltfScene.position.copy(phageGroup.position);
+    phageState._gltfScene = gltfScene;
+  });
+
+  // ============================================================
+  //  辅助函数：相机方向向量
+  // ============================================================
+  function getCameraForward() {
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    return dir;
+  }
+  function getCameraRight() {
+    const right = new THREE.Vector3();
+    right.crossVectors(getCameraForward(), camera.up).normalize();
+    return right;
+  }
+
+  // ============================================================
+  //  碰撞边界检测
+  // ============================================================
+  function checkBoundary(obj, vel, radius) {
+    const dist = obj.position.length();
+    const r = radius || 2;
+    if (dist + r >= SPACE_RADIUS) {
+      playDing();
+      // 法向量（球心→物体位置）
+      const norm = obj.position.clone().normalize();
+      // 反射速度：v' = v - 2(v·n)n
+      const dot = vel.dot(norm);
+      const reflected = vel.clone().sub(norm.clone().multiplyScalar(2 * dot));
+      // 回推到球内（不破坏 position 方向）
+      obj.position.copy(norm.multiplyScalar(SPACE_RADIUS - r - 0.5));
+      return reflected;
+    }
+    return null;
+  }
+
+  function setPhageOpacity(alpha) {
+    const root = phageState._gltfScene || phageGroup;
+    root.traverse(obj => {
+      if (!obj.isMesh || !obj.material) return;
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      mats.forEach(mat => {
+        if (mat.userData._baseOpacity == null) {
+          mat.userData._baseOpacity = mat.opacity == null ? 1 : mat.opacity;
+        }
+        mat.transparent = true;
+        mat.opacity = mat.userData._baseOpacity * alpha;
+      });
+    });
+  }
+
+  // ============================================================
+  //  主循环
+  // ============================================================
+  const clock = new THREE.Clock();
+  let timeAcc = 0;
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const frameDelta = clock.getDelta();
+    if (gameState.paused) {
+      renderer.render(scene, camera);
+      return;
+    }
+
+    const dt = Math.min(frameDelta, 0.05);
+    timeAcc += dt;
+
+    // --------- 噬菌体运动 ---------
+    const phageObj = phageState._gltfScene || phageGroup;
+    const ecoliObj = ecoliState._gltfScene || ecoliGroup;
+    const distToPhage = ecoliObj.position.distanceTo(phageObj.position);
+    infection.timer += dt;
+
+    const isAutoDemo = infection.mode === 'auto';
+
+    if (infection.phase === 'search' && distToPhage < ECOLI_LENGTH * 2.3) {
+      setInfectionPhase('approach');
+    }
+
+    if (infection.mode === 'auto' && (infection.phase === 'search' || infection.phase === 'approach')) {
+      const seekDir = ecoliObj.position.clone().sub(phageObj.position).normalize();
+      phageState.vel.addScaledVector(seekDir, 0.03);
+      if (distToPhage < ECOLI_LENGTH * 0.48) {
+        setInfectionPhase('attach');
+        infection.attachNormal.copy(phageObj.position.clone().sub(ecoliObj.position).normalize());
+      }
+    }
+
+    if (infection.mode === 'manual' && (infection.phase === 'search' || infection.phase === 'approach')) {
+      if (distToPhage < ECOLI_LENGTH * 1.5) setInfectionPhase('approach');
+      if (distToPhage < ECOLI_LENGTH * 0.45 && phageState.vel.length() < 0.55) {
+        setInfectionPhase('attach');
+        infection.attachNormal.copy(phageObj.position.clone().sub(ecoliObj.position).normalize());
+      }
+    }
+
+    if (infection.phase === 'attach') {
+      phageState.isDragging = false;
+      isLeftDown = false;
+      document.getElementById('dragging-indicator').style.display = 'none';
+      orientPhageForAttach(phageObj, infection.attachNormal);
+      const targetPos = ecoliObj.position.clone().add(infection.attachNormal.clone().multiplyScalar(ATTACH_DISTANCE));
+      phageObj.position.lerp(targetPos, isAutoDemo ? 0.08 : 0.12);
+      bodyMat.opacity = 0.62;
+      // 安全约束：附着阶段中心距离不能低于最小值，防止陷入细菌体内
+      const curDist = phageObj.position.distanceTo(ecoliObj.position);
+      if (curDist < ATTACH_DISTANCE - 0.25) {
+        phageObj.position.copy(ecoliObj.position.clone().add(infection.attachNormal.clone().multiplyScalar(ATTACH_DISTANCE - 0.25)));
+      }
+      phageState.vel.multiplyScalar(0.5);
+      if (infection.timer > (isAutoDemo ? 2.8 : 1.9)) {
+        setInfectionPhase('inject');
+      }
+    }
+
+    if (infection.phase === 'inject') {
+      phageState.isDragging = false;
+      orientPhageForAttach(phageObj, infection.attachNormal);
+      const targetPos = ecoliObj.position.clone().add(infection.attachNormal.clone().multiplyScalar(INJECT_DISTANCE));
+      phageObj.position.lerp(targetPos, isAutoDemo ? 0.1 : 0.16);
+      bodyMat.opacity = 0.5;
+      const curDist = phageObj.position.distanceTo(ecoliObj.position);
+      if (curDist < INJECT_DISTANCE - 0.25) {
+        phageObj.position.copy(ecoliObj.position.clone().add(infection.attachNormal.clone().multiplyScalar(INJECT_DISTANCE - 0.25)));
+      }
+      phageState.vel.multiplyScalar(0.25);
+      const injectDuration = isAutoDemo ? 6.8 : 4.8;
+      const injectProgress = THREE.MathUtils.clamp(infection.timer / injectDuration, 0, 1);
+      dnaMeshes.forEach(d => {
+        d.scale.y = 1.0 - injectProgress * 0.95;
+        d.scale.x = 1.0 - injectProgress * 0.32;
+        d.scale.z = 1.0 - injectProgress * 0.32;
+      });
+      headMat.emissiveIntensity = 2.4 + Math.sin(timeAcc * 18.0) * 0.55 + injectProgress * 0.85;
+      tailSheathGroup.scale.y = THREE.MathUtils.lerp(tailSheathGroup.scale.y, 0.78, 0.12);
+      bodyMat.emissiveIntensity = 1.05 + injectProgress * 0.9;
+      outlineMat.opacity = 0.25 + level * 0.04 + injectProgress * 0.08;
+      if (infection.timer > injectDuration) {
+        setInfectionPhase('infected');
+      }
+    }
+
+    if (infection.phase === 'infected') {
+      infection.isComplete = true;
+      bodyMat.opacity = 0.72;
+      const pulse = 0.7 + 0.3 * Math.sin(timeAcc * 5.2);
+      bodyMat.emissiveIntensity = 1.65 + pulse * 0.65;
+      outlineMat.opacity = 0.35 + level * 0.04 + pulse * 0.08;
+      if (infection.timer > (isAutoDemo ? 2.3 : 1.5)) {
+        phageObj.visible = false;
+        setPhageOpacity(0.0);
+        infection.shellHidden = true;
+        setInfectionPhase('lysis');
+      }
+    }
+
+    if (!infection.shellHidden && infection.phase !== 'lysis' && infection.phase !== 'infected') {
+      phageObj.visible = true;
+      setPhageOpacity(1.0);
+    }
+
+    if (infection.phase === 'lysis') {
+      phageState.isDragging = false;
+      bodyMat.opacity = 0.5;
+      if (!lysisState.initiated) {
+        lysisState.initiated = true;
+        lysisState.anchor.copy(ecoliObj.position);
+        lysisState.sourceScale.copy(ecoliObj.scale);
+      }
+
+      const t = infection.timer;
+      const pressure = THREE.MathUtils.clamp(t / 1.0, 0, 1);
+      const wobble = 1 + Math.sin(timeAcc * 16.0) * 0.06 * pressure;
+      ecoliObj.scale.set(
+        lysisState.sourceScale.x * (1 + pressure * 0.38),
+        lysisState.sourceScale.y * (1 + pressure * 0.22) * wobble,
+        lysisState.sourceScale.z * (1 + pressure * 0.22)
+      );
+
+      if (!lysisState.exploded && t > 0.9) {
+        lysisState.exploded = true;
+        lysisPoints.visible = true;
+        lysisMat.opacity = 0.95;
+        for (let i = 0; i < LYSIS_PARTICLE_COUNT; i++) {
+          lysisPositions[i * 3] = lysisState.anchor.x + (Math.random() - 0.5) * 5;
+          lysisPositions[i * 3 + 1] = lysisState.anchor.y + (Math.random() - 0.5) * 5;
+          lysisPositions[i * 3 + 2] = lysisState.anchor.z + (Math.random() - 0.5) * 5;
+          const dir = new THREE.Vector3(
+            (Math.random() - 0.5),
+            (Math.random() - 0.35),
+            (Math.random() - 0.5)
+          ).normalize();
+          lysisVelocities[i].copy(dir.multiplyScalar(0.8 + Math.random() * 1.8));
+        }
+        lysisGeo.attributes.position.needsUpdate = true;
+        ecoliObj.visible = false;
+        ecoliBiolight.intensity = 2.8;
+      }
+
+      if (lysisState.exploded) {
+        for (let i = 0; i < LYSIS_PARTICLE_COUNT; i++) {
+          lysisPositions[i * 3] += lysisVelocities[i].x;
+          lysisPositions[i * 3 + 1] += lysisVelocities[i].y;
+          lysisPositions[i * 3 + 2] += lysisVelocities[i].z;
+          lysisVelocities[i].multiplyScalar(0.985);
+          lysisVelocities[i].y -= 0.004;
+        }
+        lysisGeo.attributes.position.needsUpdate = true;
+        lysisMat.opacity = Math.max(0.0, 0.95 - (t - 0.9) * 0.26);
+        ecoliBiolight.position.copy(lysisState.anchor);
+        ecoliBiolight.intensity = Math.max(0.2, 2.8 - (t - 0.9) * 0.7);
+      }
+
+      if (t > 4.0) {
+        showRoundComplete();
+      }
+    }
+
+    if (infection.phase === 'search' || infection.phase === 'approach') {
+      bodyMat.opacity = 1.0;
+    }
+
+    // --------- 相机更新（侵染阶段仍可鼠标自由旋转）---------
+    camDist += (camTargetDist - camDist) * 0.08;
+    const isInfectionFocus = infection.phase === 'attach' || infection.phase === 'inject' || infection.phase === 'infected';
+    const desiredTarget = isInfectionFocus
+      ? ecoliObj.position.clone().add(infection.attachNormal.clone().multiplyScalar(7.0))
+      : (phageState._gltfScene || phageGroup).position;
+    camTarget.lerp(desiredTarget, isInfectionFocus ? 0.08 : 0.04);
+
+    // 相机位置（球坐标）
+    const camX = camTarget.x + camDist * Math.sin(camPhi) * Math.sin(camTheta);
+    const camY = camTarget.y + camDist * Math.cos(camPhi);
+    const camZ = camTarget.z + camDist * Math.sin(camPhi) * Math.cos(camTheta);
+
+    // 将相机限制在球形空间内
+    const camPosVec = new THREE.Vector3(camX, camY, camZ);
+    if (camPosVec.length() > SPACE_RADIUS - 1) {
+      camPosVec.normalize().multiplyScalar(SPACE_RADIUS - 1);
+    }
+    camera.position.copy(camPosVec);
+    camera.lookAt(camTarget);
+
+    if (phageState.isDragging) {
+      // 拖拽：将鼠标屏幕位移映射到3D空间（沿相机视角坐标系）
+      const spd = 0.12;
+      const fwd = getCameraForward();
+      const rgt = getCameraRight();
+      const up = camera.up.clone().normalize();
+
+      const dx = phageState.dragDelta.x * spd;
+      const dy = phageState.dragDelta.y * spd;
+      // 向左/右拖 = 屏幕左右移动
+      // 向上/下拖 = 屏幕上下移动（修复手动模式无法上下移动）
+      phageState.vel.addScaledVector(rgt, dx * 0.18);
+      phageState.vel.addScaledVector(up, -dy * 0.2);
+      // 轻微保留前后惯性，维持空间纵深感
+      phageState.vel.addScaledVector(fwd, -dy * 0.04);
+      phageState.dragDelta.set(0, 0);
+
+      // 倾斜噬菌体模型
+      const tiltX = THREE.MathUtils.clamp(phageState.vel.dot(getCameraForward()) * -0.3, -0.25, 0.25);
+      const tiltZ = THREE.MathUtils.clamp(phageState.vel.dot(getCameraRight()) * -0.2, -0.2, 0.2);
+      phageGroup.rotation.x = THREE.MathUtils.lerp(phageGroup.rotation.x, tiltX, 0.12);
+      phageGroup.rotation.z = THREE.MathUtils.lerp(phageGroup.rotation.z, tiltZ, 0.12);
+    } else {
+      // 静止：浮标上下浮动
+      phageState.floating += dt * phageState.floatSpeed;
+      const floatDY = Math.sin(phageState.floating) * phageState.floatAmp;
+      phageState.vel.y += floatDY;
+      // 阻力稳定
+      phageGroup.rotation.x = THREE.MathUtils.lerp(phageGroup.rotation.x, 0, 0.08);
+      phageGroup.rotation.z = THREE.MathUtils.lerp(phageGroup.rotation.z, 0, 0.08);
+    }
+    // 流体阻力
+    phageState.vel.multiplyScalar(0.88);
+
+    // 位移
+    phageObj.position.add(phageState.vel);
+
+    // 边界检测（噬菌体）
+    {
+      const newVel = checkBoundary(phageObj, phageState.vel, 7);
+      if (newVel) {
+        phageState.vel.copy(newVel).multiplyScalar(0.5);
+      }
+    }
+
+    // 尾丝弹性形变（浮动时末端下垂）
+    const floatDir = phageState.isDragging ? phageState.vel.clone().normalize() : new THREE.Vector3(0, 1, 0).multiplyScalar(Math.sin(phageState.floating));
+    const floatSpeed = phageState.vel.length();
+    const tailBend = floatSpeed * 6 + Math.sin(timeAcc * phageState.floatSpeed) * 0.3;
+    tailFiberData.forEach((fd, idx) => {
+      const bendDir = phageState.isDragging
+        ? phageState.vel.clone().normalize().negate()
+        : new THREE.Vector3(0, -1, 0);
+      const pts = [
+        new THREE.Vector3(fd.baseX, fd.baseY, fd.baseZ),
+        new THREE.Vector3(fd.baseX * 2.2, fd.baseY - 1.5 + bendDir.y * tailBend * 0.2, fd.baseZ * 2.2),
+        new THREE.Vector3(fd.baseX * 2.8, fd.baseY - 3.5 + bendDir.y * tailBend * 0.5, fd.baseZ * 2.8),
+        new THREE.Vector3(
+          fd.baseX * 2.0 + bendDir.x * tailBend * 0.4,
+          fd.baseY - 5.5 + bendDir.y * tailBend,
+          fd.baseZ * 2.0 + bendDir.z * tailBend * 0.4
+        ),
+      ];
+      const newCurve = new THREE.CatmullRomCurve3(pts);
+      const newGeo = new THREE.TubeGeometry(newCurve, 20, 0.12, 5, false);
+      fd.mesh.geometry.dispose();
+      fd.mesh.geometry = newGeo;
+    });
+
+    // 尾鞘弹性压缩（移动时轻微拉伸）
+    const tailStretch = 1.0 + floatSpeed * 0.2 + Math.sin(timeAcc * phageState.floatSpeed) * 0.02;
+    tailSheathGroup.scale.y = THREE.MathUtils.lerp(tailSheathGroup.scale.y, tailStretch, 0.1);
+
+    // --------- 大肠杆菌运动 ---------
+    ecoliBiolight.position.lerp(ecoliObj.position, 0.14);
+
+    // 逃跑检测
+    const isInfectionLock = infection.phase === 'attach' || infection.phase === 'inject' || infection.phase === 'infected' || infection.phase === 'lysis';
+    const fleeThreshold = ECOLI_LENGTH * 1.0;
+    if (!isInfectionLock && distToPhage < fleeThreshold) {
+      ecoliState.fleeMode = true;
+    } else {
+      ecoliState.fleeMode = false;
+    }
+
+    // 加速度随机变化
+    ecoliState.accTimer += dt;
+    if (ecoliState.accTimer > ecoliState.accInterval) {
+      ecoliState.accTimer = 0;
+      ecoliState.accInterval = 4.5 + Math.random() * 4.0;
+      // 随机新方向
+      const rx = (Math.random() - 0.5) * 2;
+      const ry = (Math.random() - 0.5) * 2;
+      const rz = (Math.random() - 0.5) * 2;
+      ecoliState.acc.set(rx, ry, rz).normalize().multiplyScalar(0.001 + Math.random() * 0.0016);
+    }
+
+    if (ecoliState.fleeMode) {
+      // 逃跑：远离噬菌体
+      const fleeDir = ecoliObj.position.clone().sub(phageObj.position).normalize();
+      ecoliState.acc.copy(fleeDir).multiplyScalar(0.0026);
+    }
+
+    if (isInfectionLock) {
+      ecoliState.acc.multiplyScalar(0.5);
+      ecoliState.vel.multiplyScalar(0.88);
+      ecoliState.vel.y += Math.sin(timeAcc * 2.2) * 0.002;
+    } else {
+      ecoliState.vel.add(ecoliState.acc);
+    }
+    // 速度限制
+    const maxVel = ecoliState.fleeMode ? 0.12 : 0.07;
+    if (ecoliState.vel.length() > maxVel) {
+      ecoliState.vel.normalize().multiplyScalar(maxVel);
+    }
+    // 流体阻力
+    ecoliState.vel.multiplyScalar(0.96);
+
+    ecoliObj.position.add(ecoliState.vel);
+
+    // 边界检测（大肠杆菌）
+    {
+      const newVel = checkBoundary(ecoliObj, ecoliState.vel, 16);
+      if (newVel) {
+        ecoliState.vel.copy(newVel).multiplyScalar(0.4);
+        // 加速度反转以避免再次撞墙
+        const norm = ecoliObj.position.clone().normalize();
+        const aDot = ecoliState.acc.dot(norm);
+        if (aDot > 0) ecoliState.acc.sub(norm.multiplyScalar(2 * aDot));
+      }
+    }
+
+    // 大肠杆菌朝向（面对移动方向）
+    if (ecoliState.vel.length() > 0.012) {
+      const targetQ = new THREE.Quaternion();
+      const moveDir = ecoliState.vel.clone().normalize();
+      ecoliState.smoothDir.lerp(moveDir, 0.08).normalize();
+      // 菌体长轴是局部X轴 → 旋转到moveDir
+      const xAxis = new THREE.Vector3(1, 0, 0);
+      targetQ.setFromUnitVectors(xAxis, ecoliState.smoothDir);
+      ecoliObj.quaternion.slerp(targetQ, 0.018);
+    }
+
+    // 鞭毛动画
+    const velLen = ecoliState.vel.length();
+    const waveAmp = THREE.MathUtils.clamp(4 + velLen * 42, 4, 18);
+    const waveFreq = THREE.MathUtils.clamp(2.2 + velLen * 12, 2.2, 6.0);
+    flagellaData.forEach((fd, idx) => {
+      const pts = [];
+      const segments = 30;
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const len = 90;
+        const a = waveAmp * (0.5 + t);
+        pts.push(new THREE.Vector3(
+          -len * t,
+          Math.sin(t * waveFreq * Math.PI + fd.phase + timeAcc * (2 + velLen * 20)) * a,
+          Math.cos(t * waveFreq * Math.PI * 0.7 + fd.phase + timeAcc * (1.5 + velLen * 15)) * a * 0.5
+        ));
+      }
+      const curve = new THREE.CatmullRomCurve3(pts);
+      const geo = new THREE.TubeGeometry(curve, 50, 0.25, 5, false);
+      fd.mesh.geometry.dispose();
+      fd.mesh.geometry = geo;
+    });
+
+    // 菌毛轻微飘动
+    piliFibers.forEach((pili, idx) => {
+      const t = timeAcc * 0.8 + idx * 0.7;
+      const baseDir = pili.userData.baseDir;
+      const wobble = Math.sin(t + idx) * 0.15 * (1 + velLen * 8);
+      const wobble2 = Math.cos(t * 1.3 + idx) * 0.1;
+      const dir = baseDir.clone();
+      dir.x += wobble;
+      dir.y += wobble2;
+      dir.normalize();
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      pili.quaternion.slerp(q, 0.15);
+    });
+
+    // --------- 渲染 ---------
+    // 大肠杆菌方向指示：当距离较远时提示方向
+    const toEcoli = ecoliObj.position.clone().sub(camera.position);
+    const camForward = getCameraForward();
+    const farEnough = camera.position.distanceTo(ecoliObj.position) > 55;
+    const inFront = camForward.dot(toEcoli.clone().normalize()) > 0.25;
+    if (farEnough && !inFront) {
+      const right = getCameraRight();
+      const up = camera.up.clone().normalize();
+      const x = right.dot(toEcoli);
+      const y = up.dot(toEcoli);
+      const ang = Math.atan2(y, x) * 180 / Math.PI;
+      ecoliArrow.style.transform = `rotate(${ang}deg)`;
+      ecoliIndicator.style.display = 'flex';
+    } else {
+      ecoliIndicator.style.display = 'none';
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  animate();
+}
+</script>
+</body>
+</html>
